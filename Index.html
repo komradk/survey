@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professional Survey Suite</title>
+    <!-- PDF & Font Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Hebrew:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Date Picker Library -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+    <!-- Custom Stylesheet -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="demo-container">
+        <div class="demo-panel">
+            <div class="panel-header"><h2>Survey Creator</h2></div>
+            <div class="panel-content"><div id="survey-creator"></div></div>
+        </div>
+        <div class="demo-panel">
+            <div class="panel-header"><h2>Survey Viewer</h2></div>
+            <div class="panel-content" id="viewer-panel"><div id="survey-viewer"></div></div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="properties-modal" class="modal-overlay">
+        <div class="modal"><div class="modal-header"><h3 class="modal-title" data-i18n="fieldProperties"></h3><button class="close-btn" onclick="creator.closeModal('properties-modal')">&times;</button></div><div id="properties-content"></div></div>
+    </div>
+    <div id="theme-modal" class="modal-overlay">
+        <div class="modal"><div class="modal-header"><h3 class="modal-title" data-i18n="themeSettings"></h3><button class="close-btn" onclick="creator.closeModal('theme-modal')">&times;</button></div><div id="theme-content"></div></div>
+    </div>
+    <div id="settings-modal" class="modal-overlay">
+        <div class="modal"><div class="modal-header"><h3 class="modal-title" data-i18n="surveySettings"></h3><button class="close-btn" onclick="creator.closeModal('settings-modal')">&times;</button></div><div id="settings-content"></div></div>
+    </div>
+    
+    <!-- PDF Render Target -->
+    <div id="pdf-render-target"></div>
+
+    <!-- Custom JavaScript -->
+    <script src="script.js"></script>
+</body>
+</html>

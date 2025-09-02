@@ -1,0 +1,408 @@
+// --- LOCALIZATION ---
+const localization = {
+    en: { fieldTypes: "Field Types", direction: "Language", exportJson: "Export JSON", clear: "Clear", themeSettings: "Theme", surveySettings: "Settings", fieldProperties: "Field Properties", saveChanges: "Save Changes", previous: "Previous", next: "Next", complete: "Complete", requiredError: "This field is required", surveyCompleted: "Survey Completed!", surveyCompletedText: "Thank you for completing our survey.", backToPanel: "⬅️ Back to Panel Settings", fontFamily: "Font Family", questionFontSize: "Question Font Size", questionColor: "Question Color", inputBg: "Input Background", inputBorder: "Input Border", pageBg: "Page Background", buttonBg: "Button Background", buttonText: "Button Text", accentColor: "Accent / Border", layout: "Layout", paginated: "Paginated", singlePage: "Single Page", format: "Format", standard: "Standard", a4: "A4 Paper", downloadPdf: "Download PDF", noFileSelected: "No file selected", generatingPdf: "Generating PDF...", loadTemplate: "Load Template", defaultTheme: "Default", officialTheme: "Official (B/W)", darkTheme: "Dark Mode", showAccent: "Show Accent Border", surveyWidth: "Survey Width", fullWidth: "Full Width", customWidth: "Custom" },
+    he: { fieldTypes: "סוגי שדות", direction: "שפה", exportJson: "ייצוא JSON", clear: "נקה", themeSettings: "עיצוב", surveySettings: "הגדרות", fieldProperties: "מאפייני שדה", saveChanges: "שמור שינויים", previous: "הקודם", next: "הבא", complete: "סיים", requiredError: "שדה זה הוא חובה", surveyCompleted: "הסקר הושלם!", surveyCompletedText: "תודה שהקדשת מזמנך למילוי הסקר.", backToPanel: "➡️ חזרה להגדרות הפאנל", fontFamily: "משפחת גופנים", questionFontSize: "גודל גופן שאלה", questionColor: "צבע שאלה", inputBg: "רקע קלט", inputBorder: "גבול קלט", pageBg: "רקע עמוד", buttonBg: "רקע כפתור", buttonText: "טקסט כפתור", accentColor: "צבע הדגשה / גבול", layout: "פריסה", paginated: "מחולק לעמודים", singlePage: "עמוד אחד", format: "פורמט", standard: "רגיל", a4: "דף A4", downloadPdf: "הורד קובץ PDF", noFileSelected: "לא נבחר קובץ", generatingPdf: "מכין PDF...", loadTemplate: "טען תבנית", defaultTheme: "ברירת מחדל", officialTheme: "רשמי (ש/ל)", darkTheme: "מצב כהה", showAccent: "הצג גבול הדגשה", surveyWidth: "רוחב סקר", fullWidth: "רוחב מלא", customWidth: "מותאם אישית" }
+};
+
+// --- SURVEY CREATOR CLASS ---
+class SurveyCreator {
+    constructor(config = {}) {
+        this.config = { language: "en", ...config };
+        this.survey = { title: "New Survey", description: "", locale: "en", pages: [{ name: "page1", elements: [] }], themeData: this.getDefaultTheme(), settings: { layout: "paginated", format: "standard", width: "800px" } };
+        this.selectedField = null; this.editingSubFieldIndex = null; this.fieldCounter = 0;
+        this.onChange = config.onChange || (() => {});
+    }
+    getString(key) { return localization[this.config.language][key] || key; }
+    getDefaultTheme() { return { fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", questionFontSize: "16px", questionColor: "#2c3e50", inputBg: "#ffffff", inputBorder: "#e0e0e0", pageBg: "#ffffff", buttonBg: "#3498db", buttonText: "#ffffff", borderColor: "#3498db", showAccentBorder: true }; }
+    render(containerId) { this.container = document.getElementById(containerId); this.renderCreator(); }
+    renderCreator() {
+        this.container.className = this.config.language === 'he' ? 'rtl' : 'ltr'; this.survey.locale = this.config.language;
+        this.container.innerHTML = `<div class="toolbar"><label>${this.getString("direction")}:</label><select onchange="creator.setLanguage(this.value)"><option value="en" ${this.config.language === 'en' ? 'selected' : ''}>English (LTR)</option><option value="he" ${this.config.language === 'he' ? 'selected' : ''}>עברית (RTL)</option></select><button class="btn btn-secondary" onclick="creator.openModal('settings-modal')">⚙️ ${this.getString("surveySettings")}</button><button class="btn btn-secondary" onclick="creator.openModal('theme-modal')">🎨 ${this.getString("themeSettings")}</button><button class="btn btn-primary" onclick="creator.exportSurvey()">${this.getString("exportJson")}</button><button class="btn btn-secondary" onclick="creator.clearSurvey()">${this.getString("clear")}</button></div><div class="creator-container"><div class="toolbox"><h3>${this.getString("fieldTypes")}</h3>${this.renderToolbox()}</div><div class="design-area">${this.renderDesignArea()}</div></div>`;
+        this.attachDragAndDrop(); this.renderAllModals();
+    }
+    renderAllModals() {
+        document.getElementById("theme-content").innerHTML = this.renderThemeEditor();
+        document.getElementById("settings-content").innerHTML = this.renderSettingsEditor();
+        document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = this.getString(el.dataset.i18n); });
+    }
+    renderThemeEditor() {
+        const theme = this.survey.themeData;
+        const fields = [ { key: "fontFamily", label: this.getString("fontFamily"), type: "text", value: theme.fontFamily }, { key: "questionFontSize", label: this.getString("questionFontSize"), type: "text", value: theme.questionFontSize }, { key: "questionColor", label: this.getString("questionColor"), type: "color", value: theme.questionColor }, { key: "inputBg", label: this.getString("inputBg"), type: "color", value: theme.inputBg }, { key: "inputBorder", label: this.getString("inputBorder"), type: "color", value: theme.inputBorder }, { key: "pageBg", label: this.getString("pageBg"), type: "color", value: theme.pageBg }, { key: "buttonBg", label: this.getString("buttonBg"), type: "color", value: theme.buttonBg }, { key: "buttonText", label: this.getString("buttonText"), type: "color", value: theme.buttonText }, { key: "borderColor", label: this.getString("accentColor"), type: "color", value: theme.borderColor } ];
+        const templates = `<div class="property-group"><label class="property-label">${this.getString("loadTemplate")}</label><select class="property-select" onchange="creator.loadThemeTemplate(this.value)"><option value="custom">Custom</option><option value="default">${this.getString("defaultTheme")}</option><option value="official">${this.getString("officialTheme")}</option><option value="dark">${this.getString("darkTheme")}</option></select></div><div class="property-group"><label class="property-label"><input type="checkbox" class="property-checkbox" onchange="creator.updateTheme('showAccentBorder', this.checked)" ${theme.showAccentBorder ? "checked" : ""}> ${this.getString("showAccent")}</label></div>`;
+        return `<div class="theme-editor">${templates}${fields.map(f => `<div class="property-group"><label class="property-label">${f.label} <input type="${f.type}" value="${f.value}" oninput="creator.updateTheme('${f.key}', this.value)"></label>${f.type !== 'color' ? `<input type="text" class="property-input" value="${f.value}" onchange="creator.updateTheme('${f.key}', this.value)">` : ''}</div>`).join('')}</div>`;
+    }
+    renderSettingsEditor() {
+        const s = this.survey.settings;
+        const isCustomWidth = s.width && s.width !== '800px' && s.width !== '100%';
+        return `<div class="property-group"><label class="property-label">${this.getString("layout")}</label><select class="property-select" onchange="creator.updateSetting('layout', this.value)"><option value="paginated" ${s.layout === 'paginated' ? 'selected' : ''}>${this.getString("paginated")}</option><option value="singlePage" ${s.layout === 'singlePage' ? 'selected' : ''}>${this.getString("singlePage")}</option></select></div><div class="property-group"><label class="property-label">${this.getString("surveyWidth")}</label><select class="property-select" onchange="creator.handleWidthChange(this.value)"><option value="800px" ${s.width === '800px' ? 'selected' : ''}>${this.getString("standard")}</option><option value="100%" ${s.width === '100%' ? 'selected' : ''}>${this.getString("fullWidth")}</option><option value="custom" ${isCustomWidth ? 'selected' : ''}>${this.getString("customWidth")}</option></select><input type="text" id="custom-width-input" class="property-input" style="margin-top:10px; display:${isCustomWidth ? 'block' : 'none'}" value="${isCustomWidth ? s.width : ''}" onchange="creator.updateSetting('width', this.value)"></div><div class="property-group"><label class="property-label">${this.getString("format")}</label><select class="property-select" onchange="creator.updateSetting('format', this.value)"><option value="standard" ${s.format === 'standard' ? 'selected' : ''}>${this.getString("standard")}</option><option value="a4" ${s.format === 'a4' ? 'selected' : ''}>${this.getString("a4")}</option></select></div>`;
+    }
+    handleWidthChange(value) { if (value === 'custom') { document.getElementById('custom-width-input').style.display = 'block'; } else { this.updateSetting('width', value); document.getElementById('custom-width-input').style.display = 'none'; } }
+    loadThemeTemplate(templateName) {
+        const templates = {
+            default: { fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", questionFontSize: "16px", questionColor: "#2c3e50", inputBg: "#ffffff", inputBorder: "#e0e0e0", pageBg: "#ffffff", buttonBg: "#3498db", buttonText: "#ffffff", borderColor: "#3498db", showAccentBorder: true },
+            official: { fontFamily: "'Times New Roman', Times, serif", questionFontSize: "16px", questionColor: "#000000", inputBg: "#ffffff", inputBorder: "#000000", pageBg: "#ffffff", buttonBg: "#444444", buttonText: "#ffffff", borderColor: "#000000", showAccentBorder: false },
+            dark: { fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", questionFontSize: "16px", questionColor: "#ffffff", inputBg: "#2c3e50", inputBorder: "#95a5a6", pageBg: "#34495e", buttonBg: "#3498db", buttonText: "#ffffff", borderColor: "#3498db", showAccentBorder: true }
+        };
+        if (templateName in templates) { this.survey.themeData = { ...templates[templateName] }; this.renderAllModals(); this.onChange(this.survey); }
+    }
+    updateTheme(key, value) { this.survey.themeData[key] = value; this.onChange(this.survey); }
+    updateSetting(key, value) { this.survey.settings[key] = value; this.onChange(this.survey); }
+    setLanguage(lang) { this.config.language = lang; this.renderCreator(); this.onChange(this.survey); }
+    renderToolbox() {
+        const fieldTypes = [{ type: "text", label: "Text Input", icon: "T" }, { type: "textarea", label: "Textarea", icon: "¶" }, { type: "radiogroup", label: "Radio Group", icon: "○" }, { type: "checkbox", label: "Checkbox", icon: "☑" }, { type: "dropdown", label: "Dropdown", icon: "▼" }, { type: "datetime", label: "Date/Time", icon: "📅" }, { type: "rating", label: "Rating", icon: "★" }, { type: "html", label: "HTML", icon: "</>" }, { type: "chatbot", label: "Chatbot", icon: "🤖" }, { type: "email", label: "Email", icon: "@" }, { type: "number", label: "Number", icon: "#" }, { type: "file", label: "File Upload", icon: "📎" }, { type: "panel", label: "Multi-Item Row", icon: "[ ]" }];
+        return fieldTypes.map(f => `<div class="field-item" draggable="true" data-type="${f.type}"><div class="field-icon">${f.icon}</div><div class="field-label">${f.label}</div></div>`).join('');
+    }
+    renderDesignArea() { return this.survey.pages[0].elements.length === 0 ? `<div class="drop-zone" id="drop-zone"><div>Drag items here</div></div>` : `<div class="survey-preview"><div class="survey-header"><input type="text" value="${this.survey.title}" onchange="creator.updateSurveyTitle(this.value)" style="font-size: 24px; font-weight: bold; border: none; text-align: center; width: 100%;"><textarea onchange="creator.updateSurveyDescription(this.value)" placeholder="Description..." style="width: 100%; border: none; text-align: center; margin-top: 10px; resize: none;">${this.survey.description}</textarea></div><div id="fields-container">${this.survey.pages[0].elements.map((el, i) => this.renderFieldPreview(el, i)).join('')}</div><div class="drop-zone" id="drop-zone" style="min-height: 100px; margin-top: 20px;"><div>Drop more items here</div></div></div>`; }
+    renderFieldPreview(el, i) { return `<div class="survey-field" draggable="true" data-index="${i}" ${this.selectedField === i ? 'class="survey-field selected"' : ''} onclick="creator.selectField(${i})"><div class="field-controls"><button class="control-btn edit-btn" onclick="event.stopPropagation();creator.editField(${i})">✎</button><button class="control-btn delete-btn" onclick="event.stopPropagation();creator.deleteField(${i})">×</button></div><div class="question-title">${el.title}${el.isRequired ? '<span class="question-required">*</span>' : ''}</div>${el.description ? `<div class="question-description">${el.description}</div>` : ''}${this.renderFieldInput(el)}</div>`; }
+    renderFieldInput(el) {
+        switch (el.type) {
+            case "text": case "email": case "number": return `<input type="${el.type}" class="form-input" placeholder="${el.placeholder || ''}" disabled>`;
+            case "textarea": return `<textarea class="form-input form-textarea" placeholder="${el.placeholder || ''}" disabled></textarea>`;
+            case "radiogroup": return `<div class="radio-group">${(el.choices || []).map(c => `<label class="option-item"><input type="radio" class="option-input" disabled><span>${c.text}</span></label>`).join('')}</div>`;
+            case "checkbox": return `<div class="checkbox-group">${(el.choices || []).map(c => `<label class="option-item"><input type="checkbox" class="option-input" disabled><span>${c.text}</span></label>`).join('')}</div>`;
+            case "dropdown": return `<select class="form-input" disabled><option>...</option>${(el.choices || []).map(c => `<option>${c.text}</option>`).join('')}</select>`;
+            case "rating": return `<div class="rating-scale">${Array.from({ length: (el.rateMax || 5) - (el.rateMin || 1) + 1 }, (_, i) => `<div class="rating-item">${(el.rateMin || 1) + i}</div>`).join('')}</div>`;
+            case "file": return `<div class="form-file-input" style="cursor:default;">Upload Area</div>`;
+            case "panel": return `<div class="panel-container-creator">${(el.elements || []).map(s => `<div class="survey-question"><div class="question-title">${s.title || s.name}${s.isRequired ? '<span class="question-required">*</span>' : ''}</div>${this.renderFieldInput(s)}</div>`).join('')}</div>`;
+            case "datetime": return `<input type="text" class="form-input" placeholder="${el.dateFormat || 'MM/DD/YYYY'}" disabled>`;
+            case "html": return `<div class="html-content-preview" style="border:1px solid #ccc; padding:10px; min-height:30px;">${el.html || 'HTML Content'}</div>`;
+            case "chatbot": return `<div class="chat-container" style="pointer-events:none;"><div class="chat-messages"><div class="chat-message bot"><div class="text">${el.initialMessage || 'Hello! How can I help you?'}</div></div></div><div class="chat-input-area"><input class="chat-input" placeholder="Type a message..." disabled><button class="chat-send-btn">➤</button></div></div>`;
+            default: return '';
+        }
+    }
+    attachDragAndDrop() {
+        this.container.querySelectorAll(".field-item[draggable]").forEach(item => item.addEventListener("dragstart", e => e.dataTransfer.setData("text/new-field-type", item.dataset.type)));
+        const dropZone = this.container.querySelector("#drop-zone");
+        const handleDropInZone = (e) => {
+            e.preventDefault(); e.currentTarget.classList.remove("drag-over");
+            const newFieldType = e.dataTransfer.getData("text/new-field-type");
+            const draggedIndexStr = e.dataTransfer.getData("text/field-index");
+            if (draggedIndexStr) {
+                const draggedIndex = parseInt(draggedIndexStr, 10);
+                const itemToMove = this.survey.pages[0].elements.splice(draggedIndex, 1)[0];
+                this.survey.pages[0].elements.push(itemToMove); this.selectedField = this.survey.pages[0].elements.length - 1;
+            } else if (newFieldType) { this.addField(newFieldType, true); }
+            this.renderCreator(); this.onChange(this.survey);
+        };
+        if (dropZone) { dropZone.addEventListener("dragover", e => { e.preventDefault(); e.currentTarget.classList.add("drag-over"); }); dropZone.addEventListener("dragleave", e => e.currentTarget.classList.remove("drag-over")); dropZone.addEventListener("drop", handleDropInZone); }
+        const surveyFields = this.container.querySelectorAll('.survey-field');
+        surveyFields.forEach(field => {
+            field.addEventListener('dragstart', e => { e.stopPropagation(); e.dataTransfer.setData('text/field-index', field.dataset.index); setTimeout(() => field.classList.add('is-dragging'), 0); });
+            field.addEventListener('dragend', e => field.classList.remove('is-dragging'));
+            field.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); surveyFields.forEach(f => f.classList.remove('drag-over-top', 'drag-over-bottom')); const rect = field.getBoundingClientRect(); e.clientY < rect.top + rect.height / 2 ? field.classList.add('drag-over-top') : field.classList.add('drag-over-bottom'); });
+            field.addEventListener('dragleave', e => field.classList.remove('drag-over-top', 'drag-over-bottom'));
+            field.addEventListener('drop', e => {
+                e.preventDefault(); e.stopPropagation();
+                const draggedIndexStr = e.dataTransfer.getData('text/field-index'); if (!draggedIndexStr) { field.classList.remove('drag-over-top', 'drag-over-bottom'); return; }
+                const draggedIndex = parseInt(draggedIndexStr, 10);
+                let targetIndex = parseInt(field.dataset.index, 10);
+                const dropAfter = field.classList.contains('drag-over-bottom'); field.classList.remove('drag-over-top', 'drag-over-bottom');
+                if (draggedIndex === targetIndex) return;
+                const itemToMove = this.survey.pages[0].elements.splice(draggedIndex, 1)[0];
+                let finalIndex = targetIndex; if (draggedIndex < targetIndex && !dropAfter) finalIndex--; if (draggedIndex > targetIndex && dropAfter) finalIndex++; if (draggedIndex < targetIndex && dropAfter) finalIndex--;
+                this.survey.pages[0].elements.splice(finalIndex, 0, itemToMove);
+                this.selectedField = finalIndex; this.renderCreator(); this.onChange(this.survey);
+            });
+        });
+    }
+    addField(type, addToEnd = false) { const newElement = this.createFieldElement(type); if (addToEnd) { this.survey.pages[0].elements.push(newElement); this.selectedField = this.survey.pages[0].elements.length - 1; } else { this.survey.pages[0].elements.push(newElement); this.selectedField = this.survey.pages[0].elements.length - 1; } this.renderCreator(); this.onChange(this.survey); }
+    createFieldElement(type, isSubElement = false) { this.fieldCounter++; const name = isSubElement ? `item_${this.fieldCounter}` : `${type}_${this.fieldCounter}`; const element = { type, name, title: `${type.charAt(0).toUpperCase() + type.slice(1)}`, isRequired: false }; if (['radiogroup', 'checkbox', 'dropdown'].includes(type)) element.choices = [{ value: 'option1', text: 'Option 1' }]; if (type === 'panel') { element.title = "Multi-Item Question"; element.elements = [this.createFieldElement('text', true), this.createFieldElement('dropdown', true)]; } if (type === 'datetime') element.dateFormat = 'MM/DD/YYYY'; if (type === 'chatbot') { element.provider = 'custom'; element.initialMessage = "Hello! How can I help you?"; element.botName = "Bot"; element.userName = "You"; element.botAvatar = "https://placehold.co/40x40/007bff/ffffff?text=B"; element.userAvatar = "https://placehold.co/40x40/6c757d/ffffff?text=U"; element.qna = [{ q: "Hello", a: "Hi there!" }]; element.geminiSystemPrompt = "You are a helpful assistant."; element.ollamaApiUrl = "http://localhost:11434/api/generate"; element.ollamaModel = "llama3"; } return element; }
+    selectField(index) { this.selectedField = index; this.renderCreator(); }
+    editField(index) { this.selectedField = index; this.editingSubFieldIndex = null; this.openModal('properties-modal', this.survey.pages[0].elements[index]); }
+    deleteField(index) { this.survey.pages[0].elements.splice(index, 1); this.selectedField = null; this.renderCreator(); this.onChange(this.survey); }
+    openModal(modalId, element) { if (element) { document.getElementById("properties-content").innerHTML = this.renderProperties(element); } document.getElementById(modalId).classList.add('show'); }
+    closeModal(modalId) { document.getElementById(modalId).classList.remove('show'); }
+    renderProperties(element) {
+        const isSubField = this.editingSubFieldIndex !== null;
+        const onchangeHandler = isSubField ? 'updateSubFieldProperty' : 'updateFieldProperty';
+        let html = isSubField ? `<button class="btn btn-secondary" style="margin-bottom:20px;" onclick="creator.editField(creator.selectedField)">${this.getString("backToPanel")}</button>` : '';
+        const generalProps = `<div class="property-group"><label class="property-label">Name</label><input type="text" class="property-input" value="${element.name}" onchange="creator.${onchangeHandler}('name',this.value)"></div><div class="property-group"><label class="property-label">Title</label><input type="text" class="property-input" value="${element.title}" onchange="creator.${onchangeHandler}('title',this.value)"></div>${!isSubField ? `<div class="property-group"><label class="property-label">Description</label><textarea class="property-input" onchange="creator.${onchangeHandler}('description',this.value)">${element.description || ''}</textarea></div>` : ''}<div class="property-group"><label class="property-label"><input type="checkbox" class="property-checkbox" ${element.isRequired ? 'checked' : ''} onchange="creator.${onchangeHandler}('isRequired',this.checked)">Required</label></div>`;
+        html += `<h4 class="property-group-title">General</h4>${generalProps}`;
+        if (!isSubField) html += this.renderVisibilityEditor(element);
+        if (['text', 'textarea'].includes(element.type)) html += `<div class="property-group"><label class="property-label">Placeholder</label><input class="property-input" value="${element.placeholder || ''}" onchange="creator.${onchangeHandler}('placeholder', this.value)"></div>`;
+        if (['radiogroup', 'checkbox', 'dropdown'].includes(element.type)) html += this.renderChoicesEditor(element.choices || []);
+        if (element.type === 'datetime') {
+            const formats = ['MM/DD/YYYY', 'DD/MM/YYYY', 'YYYY-MM-DD', 'Month D, YYYY', 'MM/DD/YYYY HH:mm', 'DD/MM/YYYY HH:mm', 'HH:mm'];
+            html += `<h4 class="property-group-title">Date/Time Settings</h4><div class="property-group"><label class="property-label">Date Format</label><select class="property-select" onchange="creator.${onchangeHandler}('dateFormat',this.value)">${formats.map(f => `<option value="${f}" ${element.dateFormat === f ? 'selected' : ''}>${f}</option>`).join('')}</select></div>`;
+        }
+        if (element.type === 'html') html += `<div class="property-group"><label class="property-label">HTML Content</label><textarea class="property-input" style="height:150px;" onchange="creator.${onchangeHandler}('html',this.value)">${element.html || ''}</textarea></div>`;
+        if (element.type === 'chatbot') html += this.renderChatbotEditor(element);
+        if (element.type === 'panel' && !isSubField) html += this.renderPanelEditor(element.elements || []);
+        html += `<div style="text-align:center;margin-top:20px;"><button class="btn btn-primary" onclick="creator.saveFieldProperties()">${this.getString("saveChanges")}</button></div>`;
+        return html;
+    }
+    renderVisibilityEditor(element) { const allQuestions = this.survey.pages[0].elements.flatMap(el => el.type === 'panel' ? el.elements.map(subEl => ({ ...subEl, title: `${el.title} > ${subEl.title}` })) : [el]).filter(el => el.name !== element.name); const condition = element.visibleIf ? element.visibleIf.match(/\{(.+?)\} = '(.+?)'/) : null; const triggerName = condition ? condition[1] : ''; const triggerValue = condition ? condition[2] : ''; return `<h4 class="property-group-title">Visibility</h4><div class="property-group"><label><input type="checkbox" class="property-checkbox" ${element.visibleIf ? 'checked' : ''} onchange="creator.toggleVisibilityRule(this.checked)">Enable rule</label></div><div id="visibility-rule-editor" style="display:${element.visibleIf ? 'block' : 'none'};"><p>Show if:</p><select class="property-select" id="visibleIf-name" onchange="creator.updateVisibilityRule()"><option value="">Select a question...</option>${allQuestions.map(q => `<option value="${q.name}" ${triggerName === q.name ? 'selected' : ''}>${q.title} (${q.name})</option>`).join('')}</select> = <input type="text" class="property-input" style="width:auto; display:inline-block; max-width: 150px;" id="visibleIf-value" value="${triggerValue}" oninput="creator.updateVisibilityRule()"></div>`; }
+    toggleVisibilityRule(enabled) { document.getElementById("visibility-rule-editor").style.display = enabled ? 'block' : 'none'; if (!enabled) this.updateFieldProperty('visibleIf', undefined); else this.updateVisibilityRule(); }
+    updateVisibilityRule() { const name = document.getElementById('visibleIf-name').value; const value = document.getElementById('visibleIf-value').value; this.updateFieldProperty('visibleIf', name && value ? `{${name}} = '${value}'` : undefined); }
+    renderPanelEditor(elements) { return `<h4 class="property-group-title">Panel Items</h4><div class="panel-editor">${elements.map((item, index) => `<div class="panel-item"><span>${item.title || item.name}<b>(${item.type})</b></span><div class="panel-item-controls"><button class="edit-panel-item-btn" onclick="creator.openSubFieldEditor(${index})">Edit✎</button><button class="remove-panel-item" onclick="creator.removePanelItem(${index})">×</button></div></div>`).join('')}<button class="add-panel-item" onclick="creator.addPanelItem()">+ Add</button></div>`; }
+    renderChoicesEditor(choices) { const onchangeHandler = this.editingSubFieldIndex !== null ? 'updateSubFieldChoice' : 'updateChoice'; return `<h4 class="property-group-title">Choices</h4><div class="choices-editor">${choices.map((choice, index) => `<div class="choice-item"><input class="choice-input" value="${choice.text}" onchange="creator.${onchangeHandler}(${index},'text',this.value)"><input class="choice-input" value="${choice.value}" onchange="creator.${onchangeHandler}(${index},'value',this.value)"><button class="remove-choice" onclick="creator.removeChoice(${index})">×</button></div>`).join('')}<button class="add-choice" onclick="creator.addChoice()">+ Add</button></div>`; }
+    renderChatbotEditor(el) {
+        const provider = el.provider || 'custom';
+        return `<h4 class="property-group-title">Chatbot Settings</h4>
+        <div class="property-group"><label class="property-label">Initial Message</label><input type="text" class="property-input" value="${el.initialMessage}" onchange="creator.updateFieldProperty('initialMessage', this.value)"></div>
+        <div class="property-group"><label class="property-label">Bot Provider</label><select class="property-select" onchange="creator.updateFieldProperty('provider', this.value); creator.editField(creator.selectedField);">${['custom', 'gemini', 'ollama'].map(p => `<option value="${p}" ${p === provider ? 'selected' : ''}>${p}</option>`).join('')}</select></div>
+        <div id="chatbot-provider-settings">
+            ${provider === 'custom' ? `<div class="property-group"><label class="property-label">Questions & Answers</label><div class="qa-editor">${(el.qna || []).map((qa, i) => `<div class="qa-item"><label>Q:</label><input class="qa-input" value="${qa.q}" onchange="creator.updateCustomQA(${i}, 'q', this.value)"><label>A:</label><input class="qa-input" value="${qa.a}" onchange="creator.updateCustomQA(${i}, 'a', this.value)"><button class="remove-qa" onclick="creator.removeCustomQA(${i})">×</button></div>`).join('')}<button class="add-qa" onclick="creator.addCustomQA()">+ Add Q&A</button></div></div>` : ''}
+            ${provider === 'gemini' ? `<div class="property-group"><label class="property-label">System Prompt</label><textarea class="property-input" onchange="creator.updateFieldProperty('geminiSystemPrompt', this.value)">${el.geminiSystemPrompt}</textarea></div>` : ''}
+            ${provider === 'ollama' ? `<div class="property-group"><label class="property-label">Ollama API URL</label><input type="text" class="property-input" value="${el.ollamaApiUrl}" onchange="creator.updateFieldProperty('ollamaApiUrl', this.value)"></div><div class="property-group"><label class="property-label">Ollama Model</label><input type="text" class="property-input" value="${el.ollamaModel}" onchange="creator.updateFieldProperty('ollamaModel', this.value)"></div>` : ''}
+        </div>`;
+    }
+    addCustomQA() { const el = this.survey.pages[0].elements[this.selectedField]; if (!el.qna) el.qna = []; el.qna.push({ q: "", a: "" }); this.editField(this.selectedField); }
+    removeCustomQA(index) { const el = this.survey.pages[0].elements[this.selectedField]; el.qna.splice(index, 1); this.editField(this.selectedField); }
+    updateCustomQA(index, key, value) { const el = this.survey.pages[0].elements[this.selectedField]; el.qna[index][key] = value; }
+    openSubFieldEditor(subIndex) { this.editingSubFieldIndex = subIndex; const subElement = this.survey.pages[0].elements[this.selectedField].elements[subIndex]; this.openModal('properties-modal', subElement); }
+    updateSubFieldProperty(property, value) { if (this.selectedField !== null && this.editingSubFieldIndex !== null) this.survey.pages[0].elements[this.selectedField].elements[this.editingSubFieldIndex][property] = value; }
+    updateSubFieldChoice(choiceIndex, field, value) { const element = this.survey.pages[0].elements[this.selectedField].elements[this.editingSubFieldIndex]; if (element.choices && element.choices[choiceIndex]) element.choices[choiceIndex][field] = value; }
+    updateFieldProperty(property, value) { if (this.selectedField !== null) this.survey.pages[0].elements[this.selectedField][property] = value; }
+    addChoice() { const element = this.editingSubFieldIndex !== null ? this.survey.pages[0].elements[this.selectedField].elements[this.editingSubFieldIndex] : this.survey.pages[0].elements[this.selectedField]; if (!element.choices) element.choices = []; const choiceNum = element.choices.length + 1; element.choices.push({ value: `option${choiceNum}`, text: `Option ${choiceNum}` }); this.openModal('properties-modal', element); }
+    removeChoice(index) { const element = this.editingSubFieldIndex !== null ? this.survey.pages[0].elements[this.selectedField].elements[this.editingSubFieldIndex] : this.survey.pages[0].elements[this.selectedField]; if (element.choices && element.choices.length > 1) { element.choices.splice(index, 1); this.openModal('properties-modal', element); } }
+    addPanelItem() { if (this.selectedField !== null) { const element = this.survey.pages[0].elements[this.selectedField]; element.elements.push(this.createFieldElement('text', true)); this.openModal('properties-modal', element); } }
+    removePanelItem(index) { if (this.selectedField !== null) { const element = this.survey.pages[0].elements[this.selectedField]; element.elements.splice(index, 1); this.openModal('properties-modal', element); } }
+    saveFieldProperties() { this.renderCreator(); this.closeModal('properties-modal'); this.onChange(this.survey); }
+    updateSurveyTitle(title) { this.survey.title = title; this.onChange(this.survey); }
+    updateSurveyDescription(description) { this.survey.description = description; this.onChange(this.survey); }
+    exportSurvey() { const blob = new Blob([JSON.stringify(this.survey, null, 2)], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'survey.json'; a.click(); URL.revokeObjectURL(url); }
+    clearSurvey() { this.survey.pages[0].elements = []; this.selectedField = null; this.renderCreator(); this.onChange(this.survey); }
+    loadSurvey(surveyData) { this.survey = surveyData; if (!surveyData.themeData) surveyData.themeData = this.getDefaultTheme(); if (!surveyData.settings) surveyData.settings = { layout: 'paginated', format: 'standard', width: "800px" }; this.setLanguage(surveyData.locale || 'en'); }
+}
+
+        // --- SURVEY VIEWER CLASS ---
+        class SurveyViewer {
+            constructor(config = {}) { this.config = config; this.survey = null; this.currentPage = 0; this.answers = {}; this.chatbotInstances = {}; }
+            getString(key) { const lang = this.survey?.locale || 'en'; return localization[lang][key] || key; }
+            loadSurvey(surveyData) { this.survey = JSON.parse(JSON.stringify(surveyData)); this.currentPage = 0; this.answers = {}; this.chatbotInstances = {}; this.render(this.config.containerId); }
+            render(containerId) {
+                this.container = document.getElementById(containerId);
+                const lang = this.survey?.locale || 'en';
+                this.container.className = lang === 'he' ? 'rtl' : 'ltr';
+                if (!this.survey) { this.container.innerHTML = `<div>No survey</div>`; return; }
+                this.applyTheme();
+                const wrapper = document.getElementById('viewer-panel');
+                wrapper.className = `panel-content ${this.survey.settings.format === 'a4' ? 'a4-format' : ''}`;
+                if (this.survey.settings.layout === 'singlePage') this.renderSinglePage(); else this.renderPaginated();
+            }
+            applyTheme() {
+                let style = document.getElementById('survey-theme-style'); if (!style) { style = document.createElement('style'); style.id = 'survey-theme-style'; document.head.appendChild(style); }
+                const theme = this.survey.themeData || creator.getDefaultTheme();
+                style.textContent = `:root { ${Object.entries(theme).map(([k, v]) => `--survey-${k.replace(/([A-Z])/g, "-$1").toLowerCase()}: ${v};`).join(' ')} --survey-accent-border-width: ${theme.showAccentBorder ? '4px' : '0px'}; --survey-container-width: ${this.survey.settings.width || '800px'}; } #pdf-render-target, .viewer-wrapper { font-family: 'Noto Sans Hebrew', ${theme.fontFamily}; }`;
+            }
+            renderSinglePage() { const allElementsHtml = this.survey.pages.map(page => page.elements.map(el => this.renderQuestion(el)).join('')).join(''); this.container.innerHTML = `<div class="viewer-wrapper"><div class="viewer-container">${this.renderHeader()}<div class="survey-content">${allElementsHtml}</div><div style="text-align:center;margin-top:30px;"><button class="btn btn-primary" onclick="viewer.complete()">${this.getString("complete")}</button></div></div></div>`; this.postRender(); }
+            renderPaginated() { if (this.currentPage >= this.survey.pages.length) { this.renderCompletion(); return; } const page = this.survey.pages[this.currentPage]; this.container.innerHTML = `<div class="viewer-wrapper"><div class="viewer-container">${this.renderHeader()}<div class="survey-content">${page.elements.map(el => this.renderQuestion(el)).join('')}</div>${this.renderNavigation()}</div></div>`; this.postRender(); }
+            renderHeader() { return `<div class="survey-header"><h1 class="survey-title">${this.survey.title}</h1><p class="survey-description">${this.survey.description}</p></div>`; }
+            renderNavigation() { const isFirstPage = this.currentPage === 0; const isLastPage = this.currentPage === this.survey.pages.length - 1; return `<div style="display:flex;justify-content:space-between;margin-top:30px;padding-top:20px;border-top:1px solid #e9ecef;"><button class="btn btn-secondary" onclick="viewer.previousPage()" ${isFirstPage ? 'disabled' : ''} style="${isFirstPage ? 'opacity:0.5;cursor:not-allowed;' : ''}">${this.getString("previous")}</button><button class="btn btn-primary" onclick="viewer.nextPage()">${isLastPage ? this.getString("complete") : this.getString("next")}</button></div>`; }
+            renderCompletion() { this.container.innerHTML = `<div class="viewer-wrapper"><div class="viewer-container" style="text-align:center;padding:40px;"><div style="font-size:64px;color:#2ecc71;margin-bottom:20px;">✅</div><h2>${this.getString("surveyCompleted")}</h2><p>${this.getString("surveyCompletedText")}</p><button id="pdf-download-btn" class="btn btn-primary" style="margin-top:20px;" onclick="viewer.downloadAsPdf()">${this.getString("downloadPdf")}</button></div></div>`; }
+            postRender() { this.attachEventListeners(); this.updateAllVisibilities(); }
+            renderQuestion(element) { const isPanel = element.type === 'panel'; const containerClass = isPanel ? 'survey-panel' : 'survey-question'; const descriptionHtml = element.description ? `<div class="question-description">${element.description}</div>` : ''; return `<div class="${containerClass}" data-name="${element.name}"><div class="question-title">${element.title}${element.isRequired ? '<span class="question-required">*</span>' : ''}</div>${descriptionHtml}${this.renderQuestionInput(element)}<div class="error-message" style="color:#e74c3c;font-size:12px;margin-top:5px;display:none;"></div></div>`; }
+            renderQuestionInput(element) {
+                const value = this.answers[element.name] || '';
+                switch (element.type) {
+                    case "text": case "email": case "number": return `<input type="${element.type}" class="form-input" name="${element.name}" value="${value}" placeholder="${element.placeholder || ''}">`;
+                    case "textarea": return `<textarea class="form-input form-textarea" name="${element.name}" placeholder="${element.placeholder || ''}">${value}</textarea>`;
+                    case "radiogroup": return `<div class="radio-group">${element.choices.map(choice => `<label class="option-item"><input type="radio" class="option-input" name="${element.name}" value="${choice.value}" ${value === choice.value ? 'checked' : ''}><span>${choice.text}</span></label>`).join('')}</div>`;
+                    case "checkbox": const selectedValues = Array.isArray(value) ? value : []; return `<div class="checkbox-group">${element.choices.map(choice => `<label class="option-item"><input type="checkbox" class="option-input" name="${element.name}" value="${choice.value}" ${selectedValues.includes(choice.value) ? 'checked' : ''}><span>${choice.text}</span></label>`).join('')}</div>`;
+                    case "dropdown": return `<select class="form-input" name="${element.name}"><option value="">...</option>${element.choices.map(choice => `<option value="${choice.value}" ${value === choice.value ? 'selected' : ''}>${choice.text}</option>`).join('')}</select>`;
+                    case "rating": const rateMax = element.rateMax || 5; const rateMin = element.rateMin || 1; return `<div class="rating-scale">${Array.from({ length: rateMax - rateMin + 1 }, (_, i) => { const ratingValue = rateMin + i; return `<div class="rating-item ${value == ratingValue ? 'selected' : ''}" data-value="${ratingValue}" data-name="${element.name}">${ratingValue}</div>`; }).join('')}</div>`;
+                    case "file": return `<input type="file" class="form-input" name="${element.name}" accept="${element.acceptedTypes || ''}">`;
+                    case "panel": return `<div class="survey-panel-container">${element.elements.map(subEl => this.renderQuestion(subEl)).join('')}</div>`;
+                    case "datetime": return `<input type="text" class="form-input" data-datetime-picker name="${element.name}" value="${value}" placeholder="${element.dateFormat || 'MM/DD/YYYY'}">`;
+                    case "html": return element.html || '';
+                    case "chatbot":
+                        const initialMsg = { role: 'bot', text: element.initialMessage || 'Hello!' };
+                        if (!this.chatbotInstances[element.name]) { this.chatbotInstances[element.name] = { transcript: [initialMsg] }; }
+                        return `<div class="chat-container">
+                                <div class="chat-messages" id="chat-messages-${element.name}">${this.chatbotInstances[element.name].transcript.map(msg => this.renderChatMessage(msg, element)).join('')}</div>
+                                <div class="chat-input-area">
+                                    <input type="text" id="chat-input-${element.name}" class="chat-input" placeholder="Type a message...">
+                                    <button class="chat-send-btn" onclick="viewer.handleChatMessage('${element.name}')">➤</button>
+                                </div>
+                            </div>`;
+                    default: return '';
+                }
+            }
+            attachEventListeners() { this.container.querySelectorAll("input,textarea,select").forEach(input => { const eventType = ['radio', 'checkbox', 'SELECT'].includes(input.type) || input.tagName === 'SELECT' ? 'change' : 'input'; input.addEventListener(eventType, e => { if (e.target.type === 'checkbox') this.updateCheckboxAnswer(e.target.name, e.target.value, e.target.checked); else if (e.target.type === 'file') this.updateAnswer(e.target.name, e.target.files); else this.updateAnswer(e.target.name, e.target.value); this.clearError(e.target.name); this.updateAllVisibilities(); }); }); this.container.querySelectorAll(".rating-item").forEach(item => item.addEventListener('click', e => { const value = parseInt(e.target.dataset.value); const name = e.target.dataset.name; this.updateAnswer(name, value); this.updateRatingVisual(name, value); this.clearError(name); this.updateAllVisibilities(); })); this.container.querySelectorAll('[data-datetime-picker]').forEach(input => { const fieldName = input.name; const element = this.survey.pages.flatMap(p => p.elements).find(el => el.name === fieldName); if (element && element.dateFormat) { const config = this.getFlatpickrConfig(element.dateFormat); config.onChange = (selectedDates, dateStr, instance) => { this.updateAnswer(fieldName, dateStr); this.clearError(fieldName); this.updateAllVisibilities(); }; flatpickr(input, config); } }); this.container.querySelectorAll('.chat-input').forEach(input => input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); const name = e.target.id.replace('chat-input-', ''); this.handleChatMessage(name); } })); }
+            getFlatpickrConfig(format) {
+                const config = { enableTime: false, noCalendar: false, dateFormat: "Y-m-d" };
+                switch (format) {
+                    case 'MM/DD/YYYY': config.dateFormat = "m/d/Y"; break;
+                    case 'DD/MM/YYYY': config.dateFormat = "d/m/Y"; break;
+                    case 'YYYY-MM-DD': config.dateFormat = "Y-m-d"; break;
+                    case 'Month D, YYYY': config.dateFormat = "F j, Y"; break;
+                    case 'MM/DD/YYYY HH:mm': config.enableTime = true; config.dateFormat = "m/d/Y H:i"; break;
+                    case 'DD/MM/YYYY HH:mm': config.enableTime = true; config.dateFormat = "d/m/Y H:i"; break;
+                    case 'HH:mm': config.enableTime = true; config.noCalendar = true; config.dateFormat = "H:i"; break;
+                    default: config.dateFormat = "m/d/Y";
+                }
+                return config;
+            }
+            updateAnswer(name, value) { this.answers[name] = value; }
+            updateCheckboxAnswer(name, value, isChecked) { if (!this.answers[name]) this.answers[name] = []; if (isChecked) { if (!this.answers[name].includes(value)) this.answers[name].push(value); } else { this.answers[name] = this.answers[name].filter(v => v !== value); } }
+            updateRatingVisual(name, value) { const question = this.container.querySelector(`[data-name="${name}"]`); if (question) question.querySelectorAll('.rating-item').forEach(item => item.classList.toggle('selected', parseInt(item.dataset.value) === value)); }
+            _evaluateCondition(conditionString) { if (!conditionString) return true; const match = conditionString.match(/\{(.+?)\} = '(.+?)'/); if (!match) return true; const [, questionName, expectedValue] = match; const actualValue = this.answers[questionName]; return Array.isArray(actualValue) ? actualValue.includes(expectedValue) : actualValue === expectedValue; }
+            updateAllVisibilities() { const updateVisibility = (element) => { const questionDiv = this.container.querySelector(`[data-name="${element.name}"]`); if (questionDiv) questionDiv.classList.toggle('hidden', !this._evaluateCondition(element.visibleIf)); }; this.survey.pages.flatMap(p => p.elements).forEach(element => { updateVisibility(element); if (element.type === 'panel') element.elements.forEach(updateVisibility); }); }
+            validateCurrentPage() { let isValid = true; const elementsToValidate = this.survey.settings.layout === 'singlePage' ? this.survey.pages.flatMap(p => p.elements) : this.survey.pages[this.currentPage].elements; const validateElement = (element) => { const questionDiv = this.container.querySelector(`[data-name="${element.name}"]`); if (questionDiv && !questionDiv.classList.contains('hidden') && element.isRequired) { const answer = this.answers[element.name]; const hasValue = (element.type === 'checkbox' || element.type === 'file' || element.type === 'chatbot') ? (answer && answer.length > 0) : (answer !== undefined && answer !== null && answer !== ''); if (!hasValue) { this.showError(element.name, this.getString("requiredError")); isValid = false; } } }; elementsToValidate.forEach(el => { if (el.type === 'panel') el.elements.forEach(validateElement); else validateElement(el); }); return isValid; }
+            showError(name, message) { const question = this.container.querySelector(`[data-name="${name}"]`); if (question) { const errorElement = question.querySelector('.error-message'); if (errorElement) { errorElement.textContent = message; errorElement.style.display = 'block'; } } }
+            clearError(name) { const question = this.container.querySelector(`[data-name="${name}"]`); if (question) { const errorElement = question.querySelector('.error-message'); if (errorElement) errorElement.style.display = 'none'; } }
+            nextPage() { if (this.validateCurrentPage()) { if (this.currentPage < this.survey.pages.length - 1) { this.currentPage++; this.renderPaginated(); } else { this.complete(); } } }
+            previousPage() { if (this.currentPage > 0) { this.currentPage--; this.renderPaginated(); } }
+            complete() { if (this.validateCurrentPage()) this.renderCompletion(); }
+            renderQuestionInputWithAnswer(element, value = '') {
+                switch (element.type) {
+                    case "text": case "email": case "number": return `<input type="${element.type}" class="form-input" value="${value}" readonly>`;
+                    case "datetime": return `<input type="text" class="form-input" value="${value}" readonly placeholder="${element.dateFormat}">`;
+                    case "textarea": return `<textarea class="form-input form-textarea" readonly>${value}</textarea>`;
+                    case "radiogroup": return `<div class="radio-group">${element.choices.map(choice => `<label class="option-item"><input type="radio" class="option-input" ${choice.value === value ? "checked" : ""} disabled><span>${choice.text}</span></label>`).join('')}</div>`;
+                    case "checkbox": const selected = Array.isArray(value) ? value : []; return `<div class="checkbox-group">${element.choices.map(choice => `<label class="option-item"><input type="checkbox" class="option-input" ${selected.includes(choice.value) ? "checked" : ""} disabled><span>${choice.text}</span></label>`).join('')}</div>`;
+                    case "dropdown": return `<select class="form-input" disabled><option>${element.choices.find(c => c.value === value)?.text || '...'}</option></select>`;
+                    case "rating": const rateMax = element.rateMax || 5; const rateMin = element.rateMin || 1; return `<div class="rating-scale">${Array.from({ length: rateMax - rateMin + 1 }, (_, i) => { const ratingValue = rateMin + i; return `<div class="rating-item ${value == ratingValue ? 'selected' : ''}">${ratingValue}</div>`; }).join('')}</div>`;
+                    case "file": return `<div class="form-input" style="background:#eee;">${value && value.length > 0 ? `${value.length} file(s) selected` : this.getString("noFileSelected")}</div>`;
+                    case "html": return element.html || '';
+                    case "chatbot": const transcript = this.chatbotInstances[element.name]?.transcript || []; return `<div class="chat-container"><div class="chat-messages">${transcript.map(msg => this.renderChatMessage(msg, element)).join('')}</div></div>`;
+                    default: return '';
+                }
+            }
+            renderQuestionWithAnswer(element) {
+                const value = this.answers[element.name];
+                if (element.type === 'panel') return `<div class="survey-panel" data-name="${element.name}"><div class="question-title">${element.title}${element.isRequired ? '<span class="question-required">*</span>' : ''}</div>${element.description ? `<div class="question-description">${element.description}</div>` : ''}<div class="survey-panel-container">${element.elements.map(subEl => this.renderQuestionWithAnswer(subEl)).join('')}</div></div>`;
+                return `<div class="survey-question" data-name="${element.name}"><div class="question-title">${element.title}${element.isRequired ? '<span class="question-required">*</span>' : ''}</div>${element.description ? `<div class="question-description">${element.description}</div>` : ''}${this.renderQuestionInputWithAnswer(element, value)}</div>`;
+            }
+            async downloadAsPdf() {
+                const downloadButton = document.getElementById("pdf-download-btn"), originalButtonText = this.getString("downloadPdf");
+                downloadButton.disabled = true; downloadButton.textContent = this.getString("generatingPdf");
+                let pdf;
+                try {
+                    const { jsPDF } = window.jspdf;
+                    pdf = new jsPDF('p', 'mm', 'a4');
+                    const renderTarget = document.getElementById('pdf-render-target');
+                    const surveyPages = this.survey.settings.layout === 'singlePage' ? [this.survey.pages.flatMap(p => p.elements)] : this.survey.pages.map(p => p.elements);
+                    const isRtl = this.survey.locale === 'he';
+
+                    for (let i = 0; i < surveyPages.length; i++) {
+                        const pageElements = surveyPages[i];
+                        const pageContentHtml = pageElements.map(el => {
+                            const isVisible = this._evaluateCondition(el.visibleIf);
+                            return isVisible ? this.renderQuestionWithAnswer(el) : '';
+                        }).join('');
+
+                        const fullPageHtml = `<div class="viewer-wrapper ${isRtl ? "rtl" : "ltr"} ${this.survey.settings.format === 'a4' ? 'a4-format' : ''}" id="pdf-render-container"><div class="viewer-container">${this.renderHeader()}<div class="survey-content">${pageContentHtml}</div></div></div>`;
+                        renderTarget.innerHTML = fullPageHtml;
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                        
+                        const canvas = await html2canvas(renderTarget.querySelector('#pdf-render-container'), { scale: 2, useCORS: true, allowTaint: true });
+                        const imgData = canvas.toDataURL('image/png');
+                        const imgProps = pdf.getImageProperties(imgData);
+                        const pdfWidth = pdf.internal.pageSize.getWidth();
+                        const pdfHeight = pdf.internal.pageSize.getHeight();
+                        const imgHeight = imgProps.height * pdfWidth / imgProps.width;
+                        
+                        let heightLeft = imgHeight;
+                        let position = 0;
+                        
+                        if (i > 0) pdf.addPage();
+                        
+                        while (heightLeft > 0) {
+                            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight, undefined, 'FAST');
+                            heightLeft -= pdfHeight;
+                            position -= pdfHeight;
+                            if (heightLeft > 0) {
+                                pdf.addPage();
+                            }
+                        }
+                    }
+                    pdf.save(`${this.survey.title.replace(/\s+/g, '-') || 'survey'}-results.pdf`);
+                } catch (error) {
+                    console.error("Failed to generate PDF:", error);
+                } finally {
+                    downloadButton.disabled = false;
+                    downloadButton.textContent = originalButtonText;
+                }
+            }
+             // Chatbot Methods
+            renderChatMessage(message, element) { return `<div class="chat-message ${message.role}"><img src="${message.role === 'user' ? element.userAvatar : element.botAvatar}" class="avatar"><div class="text">${message.text}</div></div>`; }
+            async handleChatMessage(name) {
+                const input = document.getElementById(`chat-input-${name}`);
+                const messagesContainer = document.getElementById(`chat-messages-${name}`);
+                const userMessage = input.value.trim();
+                if (!userMessage) return;
+
+                const element = this.survey.pages.flatMap(p => p.elements).find(el => el.name === name);
+                const chatInstance = this.chatbotInstances[name];
+                
+                const userMsgObj = { role: 'user', text: userMessage };
+                chatInstance.transcript.push(userMsgObj);
+                messagesContainer.innerHTML += this.renderChatMessage(userMsgObj, element);
+                input.value = '';
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+                const typingIndicator = document.createElement('div');
+                typingIndicator.className = 'chat-message bot typing-indicator';
+                typingIndicator.innerHTML = `<img src="${element.botAvatar}" class="avatar"><div class="text"><span></span><span></span><span></span></div>`;
+                messagesContainer.appendChild(typingIndicator);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+                let botResponseText = 'Sorry, I encountered an error.';
+                try {
+                    switch (element.provider) {
+                        case 'gemini': botResponseText = await this.getGeminiResponse(element, chatInstance.transcript); break;
+                        case 'ollama': botResponseText = await this.getOllamaResponse(element, userMessage); break;
+                        case 'custom':
+                        default: botResponseText = this.getCustomBotResponse(element, userMessage);
+                    }
+                } catch (err) { console.error('Chatbot Error:', err); }
+                
+                typingIndicator.remove();
+                const botMsgObj = { role: 'bot', text: botResponseText };
+                chatInstance.transcript.push(botMsgObj);
+                messagesContainer.innerHTML += this.renderChatMessage(botMsgObj, element);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                this.updateAnswer(name, chatInstance.transcript);
+            }
+            getCustomBotResponse(element, userMessage) { const qna = element.qna || []; const match = qna.find(item => userMessage.toLowerCase() === item.q.toLowerCase()); return match ? match.a : "Sorry, I don't understand that question."; }
+            async getGeminiResponse(element, transcript) {
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                const payload = {
+                    contents: transcript.map(msg => ({ role: msg.role === 'bot' ? 'model' : 'user', parts: [{ text: msg.text }] })),
+                    systemInstruction: { parts: [{ text: element.geminiSystemPrompt }] }
+                };
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+                const result = await response.json();
+                return result.candidates[0].content.parts[0].text;
+            }
+            async getOllamaResponse(element, userMessage) {
+                const response = await fetch(element.ollamaApiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: element.ollamaModel, prompt: userMessage, stream: false }) });
+                if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+                const result = await response.json();
+                return result.response;
+            }
+        }
+
+        // --- INITIALIZATION ---
+        const creator = new SurveyCreator({ onChange: (survey) => viewer.loadSurvey(survey) });
+        const viewer = new SurveyViewer({ containerId: 'survey-viewer' });
+        creator.render('survey-creator');
+        viewer.render('survey-viewer');
+        
+        // --- DEMO SURVEY ---
+        creator.loadSurvey({
+            title: "Advanced Feedback Form",
+            description: "A demo showcasing all features of the survey suite.",
+            locale: 'en',
+            pages: [{
+                name: 'page1',
+                elements: [
+                    { type: 'html', name: 'intro_html', html: '<h3>Welcome!</h3><p>Thank you for participating in our feedback survey. Your input is valuable to us.</p>' },
+                    { type: 'rating', name: 'satisfaction', title: 'Overall, how satisfied are you with our product?', isRequired: true, rateMax: 10 },
+                    { type: 'datetime', name: 'purchase_date', title: 'When did you purchase the product?', isRequired: true, dateFormat: 'Month D, YYYY' },
+                    { type: 'chatbot', name: 'feedback_bot', title: 'Discuss your experience with our AI assistant', isRequired: true, provider: 'custom', initialMessage: "Hello! I'm here to gather your feedback. What did you like most about the product?", qna: [{q:"What did you like most about the product?", a:"Thanks for sharing! What could be improved?"}, {q:"Anything else?", a:"Got it. Thank you for your valuable feedback!"}] }
+                ]
+            }],
+            themeData: {
+                fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+                questionFontSize: "18px", questionColor: "#34495e", inputBg: "#ecf0f1", inputBorder: "#bdc3c7",
+                pageBg: "#ffffff", buttonBg: "#2ecc71", buttonText: "#ffffff", borderColor: "#27ae60",
+                showAccentBorder: true
+            },
+            settings: { layout: 'paginated', format: 'standard', width: "800px" }
+        });
+
